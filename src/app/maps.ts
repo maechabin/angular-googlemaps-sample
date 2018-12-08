@@ -1,0 +1,161 @@
+/// <reference types="@types/googlemaps" />
+import { Point, LineSymbol } from './googlemaps.model';
+
+class Maps {
+  /** Markerを表示する拠点リスト */
+  points: Point[] = [
+    { title: 'maker1', position: { lat: -25.363, lng: 131.044 } },
+    { title: 'maker2', position: { lat: -32.397, lng: 20.044 } },
+    { title: 'maker3', position: { lat: 34.397, lng: 25.044 } },
+    { title: 'maker4', position: { lat: 48.397, lng: 90.044 } },
+    { title: 'maker5', position: { lat: 29.32, lng: 135.9 } },
+  ];
+
+  map!: google.maps.Map;
+
+  /** ポリライン */
+  line: google.maps.Polyline | null = null;
+
+  /**
+   * Mapを任意の要素に表示する
+   * @param mapDiv Mapを表示する要素
+   */
+  public initMap(mapDiv: HTMLDivElement | null): void {
+    /**
+     * 地図を表示する際のオプション（初期表示）
+     * Mapsのオプション一覧
+     * https://developers.google.com/maps/documentation/javascript/reference/map#MapOptions
+     */
+    const mapOptions: google.maps.MapOptions = {
+      center: new google.maps.LatLng(-34.397, 150.644),
+      zoom: 8,
+      mapTypeId: google.maps.MapTypeId.ROADMAP,
+    };
+
+    /** Mapオブジェクトに地図表示要素情報とオプション情報を渡し、インスタンス生成 */
+    this.map = new google.maps.Map(mapDiv, mapOptions); // <= refで取得した要素
+  }
+
+  /**
+   * Map上にマーカーを表示する
+   */
+  public initMarker(): void {
+    /** 範囲（境界）のインスタンスを作成するクラス */
+    const bounds = new google.maps.LatLngBounds();
+
+    /** Markerを表示 */
+    this.points.forEach(
+      (point: Point): void => {
+        /**
+         * Markerを設定
+         * Markerオプション
+         * https://developers.google.com/maps/documentation/javascript/reference/marker#MarkerOptions
+         */
+        const marker = new google.maps.Marker({
+          map: this.map,
+          draggable: true, // ドラッグできるか
+          opacity: 0.7, // 透明度
+          position: point.position,
+          title: point.title,
+        });
+
+        /** 位置情報を範囲に追加 */
+        bounds.extend(marker.getPosition());
+
+        /** 吹き出しを設定 */
+        const infoWindow = new google.maps.InfoWindow({
+          content: point.title,
+        });
+
+        /** クリック時の処理（吹き出し表示） */
+        marker.addListener('click', () => {
+          infoWindow.open(this.map, marker);
+        });
+
+        /** マーカードラッグ時の処理（ポリラインのアップデート） */
+        marker.addListener('dragend', (event: google.maps.MouseEvent) => {
+          const title = point.title;
+          this.points = this.points.map((p: Point) => {
+            if (p.title === title) {
+              return {
+                ...p,
+                position: {
+                  lat: event.latLng.lat(),
+                  lng: event.latLng.lng(),
+                },
+              };
+            }
+            return p;
+          });
+
+          this.initPolyLine();
+        });
+      },
+    );
+
+    /** すべてのMarkerを地図に収める */
+    this.map.fitBounds(bounds);
+  }
+
+  /**
+   * Map上にポリラインを表示する
+   */
+  public initPolyLine(): void {
+    /**
+     * 既存のポリラインを削除
+     * https://developers.google.com/maps/documentation/javascript/examples/polyline-remove
+     * */
+    if (this.line !== null) {
+      this.line.setMap(null);
+    }
+
+    /**
+     * polyline上を動くシンボル
+     * https://developers.google.com/maps/documentation/javascript/symbols#animate
+     * */
+    const lineSymbol: LineSymbol = {
+      path: google.maps.SymbolPath.CIRCLE,
+      scale: 8,
+      strokeColor: '#113345',
+    };
+
+    /** polylineを表示 */
+    this.line = new google.maps.Polyline({
+      path: this.points
+        .map((point: Point) => {
+          return point.position;
+        })
+        .concat([this.points[0].position]),
+      icons: [
+        {
+          icon: lineSymbol,
+          offset: '100%',
+        },
+      ],
+      strokeColor: '#ccc',
+      map: this.map,
+    });
+
+    /** ポリラインを表示 */
+    this.line.setMap(this.map);
+
+    /** アニメーションを実行 */
+    this.animateCircle(this.line);
+  }
+
+  /**
+   * シンボルをpolylineに沿ってアニメーションさせる
+   * */
+  private animateCircle(line: google.maps.Polyline): void {
+    let count = 0;
+    window.setInterval((): void => {
+      count = (count + 1) % 200;
+
+      const icons = line.get('icons');
+      icons[0].offset = count / 2 + '%';
+      line.set('icons', icons);
+    }, 40);
+  }
+}
+
+export default Maps;
